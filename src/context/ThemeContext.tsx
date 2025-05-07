@@ -2,26 +2,33 @@
 
 import { createContext, useContext, ReactNode } from 'react';
 
-type Theme = 'dark';
+import { useState, useEffect } from 'react';
+
+type Theme = 'dark' | 'light';
 
 interface ThemeContextType {
   theme: Theme;
+  toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Sempre usar o tema dark
-  const theme: Theme = 'dark';
+  const [theme, setTheme] = useState<Theme>('dark');
 
-  // Aplicar classe de tema ao documento no lado do cliente
-  if (typeof document !== 'undefined') {
-    document.documentElement.classList.remove('light-theme');
-    document.documentElement.classList.add('dark-theme');
-  }
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.remove('light-theme', 'dark-theme');
+      document.documentElement.classList.add(theme === 'dark' ? 'dark-theme' : 'light-theme');
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   return (
-    <ThemeContext.Provider value={{ theme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
