@@ -527,12 +527,12 @@ Texto em português formal impecável (reescreva completamente):
 `;
 
     try {
-      // Try with primary model first, then fallback to alternatives if needed
+      // Try with simpler, more reliable models
       let response;
       try {
-        // Call the Hugging Face API with Mistral-7B
+        // Call the Hugging Face API with a simpler model
         response = await hf.textGeneration({
-          model: 'mistralai/Mistral-7B-Instruct-v0.2',
+          model: 'gpt2', // Using a simpler, more widely available model
           inputs: prompt,
           parameters: {
             max_new_tokens: 512,
@@ -543,17 +543,23 @@ Texto em português formal impecável (reescreva completamente):
         });
       } catch (primaryModelError) {
         console.log('Primary model failed, trying fallback model:', primaryModelError);
-        // Try with a fallback model
-        response = await hf.textGeneration({
-          model: 'google/flan-t5-xxl', // Fallback to a more widely available model
-          inputs: prompt,
-          parameters: {
-            max_new_tokens: 512,
-            temperature: 0.7,
-            top_p: 0.95,
-            do_sample: true,
-          }
-        });
+        try {
+          // Try with another fallback model
+          response = await hf.textGeneration({
+            model: 'distilgpt2', // Another widely available model
+            inputs: prompt,
+            parameters: {
+              max_new_tokens: 512,
+              temperature: 0.7,
+              top_p: 0.95,
+              do_sample: true,
+            }
+          });
+        } catch (fallbackModelError) {
+          console.log('Fallback model also failed, using mock translation:', fallbackModelError);
+          // If both models fail, use mock translation
+          throw new Error('All models failed');
+        }
       }
 
       // Extract the translated text from the response
