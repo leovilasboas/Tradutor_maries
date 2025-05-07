@@ -32,6 +32,7 @@ export default function TranslatorForm({ onTranslate, isLoading, initialText = '
   return (
     <div>
       <form onSubmit={handleSubmit}>
+
         <textarea
           id="text-input"
           className="w-full p-4 rounded-md focus:outline-none focus:ring-2 min-h-[180px]"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 
 interface MariaStatsProps {
@@ -21,39 +21,45 @@ export default function MariaStats({ originalText }: MariaStatsProps) {
     levelDescription: string;
   }>(null);
 
-  useEffect(() => {
-    if (!originalText) return;
+  const analyzeText = async () => {
+    if (!originalText || originalText.trim() === '') return;
     
-    const analyzeText = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ text: originalText }),
-        });
-        
-        if (!response.ok) {
-          throw new Error('Falha na análise');
-        }
-        
-        const data = await response.json();
-        setAnalysis(data);
-      } catch (error) {
-        console.error('Erro na análise:', error);
-      } finally {
-        setLoading(false);
+    setLoading(true);
+    try {
+      // Usar a chave fixa da API
+      const token = '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';
+      
+      console.log('Analisando texto:', originalText);
+      
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ text: originalText }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Falha na análise');
       }
-    };
-    
-    analyzeText();
-  }, [originalText]);
-  
-  if (!originalText || !analysis) {
+      
+      const data = await response.json();
+      if (data.error) {
+        console.error('Erro na análise:', data.error);
+      } else {
+        setAnalysis(data);
+      }
+    } catch (error) {
+      console.error('Erro na análise:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!originalText) {
     return (
-      <div className="rounded-md p-3 mt-3 animate-pulse border"
+      <div className="rounded-md p-3 mt-3 border"
            style={{
              backgroundColor: 'rgba(45, 45, 45, 0.8)',
              borderColor: 'rgb(75, 75, 75)'
@@ -61,8 +67,45 @@ export default function MariaStats({ originalText }: MariaStatsProps) {
         <div className="flex items-center justify-center h-24">
           <p className="text-sm"
              style={{ color: 'rgb(156, 163, 175)' }}>
-            {loading ? 'Analisando o texto com IA...' : 'Aguardando texto para análise...'}
+            Aguardando texto para análise...
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!analysis) {
+    return (
+      <div className="rounded-md p-3 mt-3 border"
+           style={{
+             backgroundColor: 'rgba(45, 45, 45, 0.8)',
+             borderColor: 'rgb(75, 75, 75)'
+           }}>
+        <div className="flex flex-col items-center justify-center h-24">
+          {loading ? (
+            <p className="text-sm mb-2" style={{ color: 'rgb(156, 163, 175)' }}>
+              Analisando o texto com IA...
+            </p>
+          ) : (
+            <>
+              <p className="text-sm mb-2" style={{ color: 'rgb(156, 163, 175)' }}>
+                Clique no botão abaixo para analisar o texto
+              </p>
+              <button 
+                onClick={analyzeText}
+                className="px-4 py-2 rounded-md text-sm font-medium"
+                style={{
+                  backgroundColor: theme === 'dark' ? 'rgb(249, 115, 22)' : 'rgb(234, 88, 12)',
+                  color: 'white',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.7 : 1
+                }}
+                disabled={loading}
+              >
+                Analisar Texto
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
@@ -99,101 +142,58 @@ export default function MariaStats({ originalText }: MariaStatsProps) {
       
       <div className="grid grid-cols-2 gap-2 mb-3">
         <div className="rounded p-2 border" 
-             style={{
-               backgroundColor: 'rgba(55, 55, 55, 0.7)',
-               borderColor: 'rgb(85, 85, 85)'
-             }}>
-          <p className="text-xs" 
-             style={{ color: 'rgb(200, 200, 200)' }}>
-            Total de Palavras
-          </p>
-          <p className="text-lg font-semibold"
-             style={{ color: 'white' }}>
-            {analysis.wordCount}
-          </p>
+             style={{ borderColor: 'rgb(75, 75, 75)' }}>
+          <p className="text-xs mb-1" style={{ color: 'rgb(156, 163, 175)' }}>Palavras</p>
+          <p className="text-lg font-bold" style={{ color: 'white' }}>{analysis.wordCount}</p>
         </div>
-        
-        <div className="rounded p-2 border"
-             style={{
-               backgroundColor: 'rgba(55, 55, 55, 0.7)',
-               borderColor: 'rgb(85, 85, 85)'
-             }}>
-          <p className="text-xs"
-             style={{ color: 'rgb(200, 200, 200)' }}>
-            Palavras Problemáticas
-          </p>
-          <p className="text-lg font-semibold"
-             style={{ color: 'white' }}>
-            {analysis.problemWordCount} 
-            <span className="text-xs"
-                  style={{ color: 'rgb(200, 200, 200)' }}>
-              ({analysis.problemPercentage}%)
-            </span>
-          </p>
+        <div className="rounded p-2 border" 
+             style={{ borderColor: 'rgb(75, 75, 75)' }}>
+          <p className="text-xs mb-1" style={{ color: 'rgb(156, 163, 175)' }}>Palavras Problemáticas</p>
+          <p className="text-lg font-bold" style={{ color: 'white' }}>{analysis.problemWordCount} ({analysis.problemPercentage}%)</p>
         </div>
       </div>
       
       <div className="mb-3">
-        <div className="flex justify-between text-xs mb-1">
-          <span className="flex items-center"
-                style={{ color: 'rgb(200, 200, 200)' }}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            Nível de Dificuldade
-          </span>
-          <span className="font-semibold"
-                style={{ color: 'rgb(249, 115, 22)' }}>
-            {analysis.difficultyScore}%
-          </span>
+        <div className="w-full bg-gray-700 rounded-full h-2.5">
+          <div className="h-2.5 rounded-full" 
+               style={{ 
+                 width: `${analysis.difficultyScore}%`,
+                 backgroundColor: theme === 'dark' ? 'rgb(249, 115, 22)' : 'rgb(234, 88, 12)'
+               }}></div>
         </div>
-        <div className="w-full rounded-full h-2.5 overflow-hidden border"
-             style={{
-               backgroundColor: 'rgba(35, 35, 35, 0.5)',
-               borderColor: 'rgb(65, 65, 65)'
-             }}>
-          <div 
-            className="h-2.5 rounded-full transition-all duration-500"
-            style={{ 
-              width: `${analysis.difficultyScore}%`,
-              backgroundColor: 
-                analysis.difficultyScore <= 25 ? 'rgb(253, 224, 71)' :
-                analysis.difficultyScore <= 50 ? 'rgb(234, 179, 8)' :
-                analysis.difficultyScore <= 75 ? 'rgb(249, 115, 22)' : 
-                                        'rgb(248, 113, 113)'
-            }}
-          ></div>
+        <div className="flex justify-between mt-1">
+          <span className="text-xs" style={{ color: 'rgb(156, 163, 175)' }}>Fácil</span>
+          <span className="text-xs" style={{ color: 'rgb(156, 163, 175)' }}>Difícil</span>
         </div>
       </div>
       
-      <div className="rounded-md p-2 mb-2 border"
-           style={{
-             backgroundColor: 'rgba(55, 55, 55, 0.5)',
-             borderColor: 'rgb(85, 85, 85)'
-           }}>
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-sm font-semibold flex items-center">
-            <span className="mr-2 text-xl">{levelEmoji}</span>
-            <span className={`${levelColor}`}>{analysis.mariaLevel}</span>
-          </p>
-          <span className="text-xs px-2 py-0.5 rounded border"
-                style={{
-                  backgroundColor: 'rgba(35, 35, 35, 0.7)',
-                  borderColor: 'rgb(65, 65, 65)',
-                  color: 'rgb(249, 115, 22)'
-                }}>
-            {analysis.difficultyScore}/100
-          </span>
+      <div className="rounded p-3 border mb-2" 
+           style={{ borderColor: 'rgb(75, 75, 75)' }}>
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="text-xs mb-1" style={{ color: 'rgb(156, 163, 175)' }}>Nível de Mariês</p>
+            <p className={`text-lg font-bold ${levelColor}`}>{analysis.mariaLevel}</p>
+          </div>
+          <div className="text-2xl">{levelEmoji}</div>
         </div>
-        <p className="text-xs"
-           style={{ color: 'rgb(200, 200, 200)' }}>
-          {analysis.levelDescription}
-        </p>
       </div>
       
-      <div className="text-xs italic"
-           style={{ color: 'rgba(200, 200, 200, 0.7)' }}>
-        Baseado em {analysis.problemWordCount} palavras problemáticas e {analysis.longWords} palavras complexas.
+      <p className="text-xs" style={{ color: 'rgb(156, 163, 175)' }}>{analysis.levelDescription}</p>
+      
+      <div className="mt-3 flex justify-end">
+        <button 
+          onClick={analyzeText}
+          className="px-3 py-1 rounded-md text-xs font-medium"
+          style={{
+            backgroundColor: theme === 'dark' ? 'rgb(55, 55, 55)' : 'rgb(234, 88, 12)',
+            color: 'white',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.7 : 1
+          }}
+          disabled={loading}
+        >
+          {loading ? 'Analisando...' : 'Analisar Novamente'}
+        </button>
       </div>
     </div>
   );

@@ -1,69 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { HfInference } from '@huggingface/inference';
-
-// Initialize the Hugging Face client if API key is available
-const hf = process.env.HUGGINGFACE_API_KEY 
-  ? new HfInference(process.env.HUGGINGFACE_API_KEY) 
-  : null;
-
-// Mock analysis function for development or when API key is not available
-function mockAnalyze(text: string) {
-  // Count words
-  const words = text.split(/\s+/).filter(word => word.length > 0);
-  const wordCount = words.length;
-  
-  // Simple patterns to detect informal language
-  const abbreviationPatterns = [
-    /\b(vc|vcs|pq|q|n|tb|hj|kd|cmg|ctg|blz|vlw|flw|mto|mt|pra|qnd|qdo|msm|tbm|oq|pfvr|fds|rs)\b/i,
-    /\b\w*[k]\w*\b/i,
-    /\b[bcdfghjklmnpqrstvwxz]{3,}\b/i,
-  ];
-  
-  // Count problematic words
-  const problemWords = words.filter(word => 
-    abbreviationPatterns.some(pattern => pattern.test(word))
-  );
-  const problemWordCount = problemWords.length;
-  
-  // Calculate percentages
-  const problemPercentage = Math.min(100, Math.round((problemWordCount / wordCount) * 100)) || 0;
-  
-  // Analyze complexity
-  const longWords = words.filter(word => word.length > 6).length;
-  const longWordsPercentage = Math.min(100, Math.round((longWords / wordCount) * 100)) || 0;
-  
-  // Calculate difficulty score
-  const difficultyScore = Math.min(100, Math.round(problemPercentage * 0.7 + longWordsPercentage * 0.3)) || 0;
-  
-  // Determine Mariês level
-  let mariaLevel = "Iniciante";
-  let levelDescription = "Poucas abreviações e erros. Fácil de entender.";
-  
-  if (difficultyScore > 25 && difficultyScore <= 50) {
-    mariaLevel = "Intermediário";
-    levelDescription = "Algumas abreviações e erros. Moderadamente difícil.";
-  } else if (difficultyScore > 50 && difficultyScore <= 75) {
-    mariaLevel = "Avançado";
-    levelDescription = "Muitas abreviações e erros. Desafio para traduzir.";
-  } else if (difficultyScore > 75) {
-    mariaLevel = "Maria Suprema";
-    levelDescription = "Texto extremamente difícil. Só a Maria entende!";
-  }
-  
-  return {
-    wordCount,
-    problemWordCount,
-    problemPercentage,
-    longWords,
-    longWordsPercentage,
-    difficultyScore,
-    mariaLevel,
-    levelDescription
-  };
-}
+import OpenAI from 'openai';
 
 export async function POST(request: NextRequest) {
   try {
+    // Extrair o texto da requisição
     const { text } = await request.json();
 
     if (!text || typeof text !== 'string') {
@@ -72,23 +12,36 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    
+    // Usar a chave fixa da API
+    const token = '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';
+    
+    // Configurar o cliente OpenAI para usar o OpenRouter
+    const openai = new OpenAI({
+      apiKey: token,
+      baseURL: 'https://openrouter.ai/api/v1',
+      defaultHeaders: {
+        "HTTP-Referer": "https://tradutor-maries.vercel.app", // Site URL para rankings no openrouter.ai
+        "X-Title": "Tradutor de Mariês", // Título do site para rankings no openrouter.ai
+      },
+    });
 
-    // If no API key is available, use mock analysis
-    if (!process.env.HUGGINGFACE_API_KEY || !hf) {
-      console.log('API key not configured, using mock analysis');
-      const analysis = mockAnalyze(text);
-      return NextResponse.json(analysis);
-    }
+    try {
+      console.log('Using OpenRouter API for analysis with DeepSeek Chat v3 model');
+      
+      // Criar uma solicitação de chat para o modelo
+      const response = await openai.chat.completions.create({
+        model: 'deepseek/deepseek-chat-v3-0324:free', // Modelo DeepSeek disponível gratuitamente no OpenRouter
+        messages: [
+          {
+            role: 'system',
+            content: 'Você é um especialista em análise linguística do português brasileiro. Sua tarefa é analisar textos que podem conter erros gramaticais, ortográficos e gírias. Você deve retornar apenas um objeto JSON válido, sem texto adicional.'
+          },
+          {
+            role: 'user',
+            content: `Analise o seguinte texto: "${text}"
 
-    // Create a prompt for AI to analyze the Mariês text
-    const prompt = `
-Você é um especialista em análise linguística do português brasileiro, com foco em linguagem informal e gírias.
-
-Sua tarefa é analisar o texto a seguir, que está escrito em "Mariês" (português informal com muitos erros de ortografia, gramática, pontuação e uso de gírias), e fornecer uma análise detalhada.
-
-Texto para análise: "${text}"
-
-Por favor, forneça uma análise estruturada no seguinte formato JSON:
+Retorne um objeto JSON com exatamente estes campos (todos os campos são obrigatórios):
 {
   "wordCount": número total de palavras no texto,
   "problemWordCount": número de palavras com problemas (abreviações, erros, gírias),
@@ -96,84 +49,141 @@ Por favor, forneça uma análise estruturada no seguinte formato JSON:
   "longWords": número de palavras longas (mais de 6 letras),
   "longWordsPercentage": porcentagem de palavras longas (0-100),
   "difficultyScore": pontuação de dificuldade geral (0-100),
-  "mariaLevel": nível de "Mariês" ("Iniciante", "Intermediário", "Avançado" ou "Maria Suprema"),
+  "mariaLevel": um destes valores exatos: "Iniciante", "Intermediário", "Avançado" ou "Maria Suprema",
   "levelDescription": breve descrição do nível de dificuldade
 }
 
-Regras para determinar o nível de "Mariês":
-- "Iniciante" (0-25 pontos): Poucas abreviações e erros. Fácil de entender.
-- "Intermediário" (26-50 pontos): Algumas abreviações e erros. Moderadamente difícil.
-- "Avançado" (51-75 pontos): Muitas abreviações e erros. Desafio para traduzir.
-- "Maria Suprema" (76-100 pontos): Texto extremamente difícil. Só a Maria entende!
-
-Forneça apenas o JSON como resposta, sem texto adicional.
-`;
-
-    try {
-      // Try with simpler, more reliable models
-      let response;
-      try {
-        // Call the Hugging Face API with a simpler model
-        response = await hf.textGeneration({
-          model: 'gpt2', // Using a simpler, more widely available model
-          inputs: prompt,
-          parameters: {
-            max_new_tokens: 512,
-            temperature: 0.3,
-            top_p: 0.95,
-            do_sample: true,
+Retorne APENAS o JSON, sem explicações, comentários ou texto adicional.`
           }
-        });
-      } catch (primaryModelError) {
-        console.log('Primary model failed, trying fallback model:', primaryModelError);
-        try {
-          // Try with another fallback model
-          response = await hf.textGeneration({
-            model: 'distilgpt2', // Another widely available model
-            inputs: prompt,
-            parameters: {
-              max_new_tokens: 512,
-              temperature: 0.3,
-              top_p: 0.95,
-              do_sample: true,
-            }
-          });
-        } catch (fallbackModelError) {
-          console.log('Fallback model also failed, using mock analysis:', fallbackModelError);
-          // If both models fail, use mock analysis
-          throw new Error('All models failed');
-        }
+        ],
+        temperature: 0.3,
+        max_tokens: 512
+      });
+      
+      // Verificar se há resposta válida
+      if (!response.choices || response.choices.length === 0 || !response.choices[0].message.content) {
+        throw new Error('Resposta vazia do modelo');
       }
 
-      // Extract the JSON from the response
-      let analysisText = response.generated_text.trim();
+      // Extrair o JSON da resposta
+      let jsonText = response.choices[0].message.content.trim();
       
-      // Try to extract just the JSON part
-      const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+      // Tentar encontrar o JSON na resposta, caso haja texto adicional
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        analysisText = jsonMatch[0];
+        jsonText = jsonMatch[0];
       }
+      
+      console.log('JSON response:', jsonText);
       
       try {
-        // Parse the JSON
-        const analysis = JSON.parse(analysisText);
-        return NextResponse.json(analysis);
+        // Tentar analisar o JSON
+        const analysisData = JSON.parse(jsonText);
+        
+        // Garantir que todos os campos obrigatórios estão presentes
+        const requiredFields = [
+          'wordCount', 'problemWordCount', 'problemPercentage',
+          'longWords', 'longWordsPercentage', 'difficultyScore',
+          'mariaLevel', 'levelDescription'
+        ];
+        
+        const missingFields = requiredFields.filter(field => !(field in analysisData));
+        
+        if (missingFields.length > 0) {
+          console.error('Campos obrigatórios ausentes:', missingFields);
+          throw new Error(`Campos obrigatórios ausentes: ${missingFields.join(', ')}`);
+        }
+        
+        return NextResponse.json(analysisData);
       } catch (jsonError) {
-        console.error('Error parsing JSON from AI response:', jsonError);
-        // Fallback to mock analysis if JSON parsing fails
-        const analysis = mockAnalyze(text);
-        return NextResponse.json(analysis);
+        console.error('JSON parsing error:', jsonError);
+        
+        // Fallback: Análise simples se o JSON não puder ser analisado
+        const words = text.split(/\s+/).filter(word => word.length > 0);
+        const wordCount = words.length;
+        const longWords = words.filter(word => word.length > 6).length;
+        const longWordsPercentage = Math.round((longWords / wordCount) * 100) || 0;
+        
+        // Estimativa simples de palavras problemáticas
+        const problemWordCount = Math.round(wordCount * 0.4); // Estimativa de 40% de palavras problemáticas
+        const problemPercentage = 40;
+        
+        // Cálculo simples de pontuação de dificuldade
+        const difficultyScore = Math.min(100, Math.round((problemPercentage + longWordsPercentage) / 2));
+        
+        // Determinar o nível de Maria com base na pontuação
+        let mariaLevel = "Iniciante";
+        let levelDescription = "Texto com poucas abreviações e erros. Fácil de entender.";
+        
+        if (difficultyScore > 75) {
+          mariaLevel = "Maria Suprema";
+          levelDescription = "Texto extremamente difícil. Só a Maria entende!";
+        } else if (difficultyScore > 50) {
+          mariaLevel = "Avançado";
+          levelDescription = "Muitas abreviações e erros. Desafio para traduzir.";
+        } else if (difficultyScore > 25) {
+          mariaLevel = "Intermediário";
+          levelDescription = "Algumas abreviações e erros. Moderadamente difícil.";
+        }
+        
+        return NextResponse.json({
+          wordCount,
+          problemWordCount,
+          problemPercentage,
+          longWords,
+          longWordsPercentage,
+          difficultyScore,
+          mariaLevel,
+          levelDescription
+        });
       }
-    } catch (apiError) {
-      console.error('Hugging Face API error:', apiError);
-      // Fallback to mock analysis if API call fails
-      const analysis = mockAnalyze(text);
-      return NextResponse.json(analysis);
+    } catch (error) {
+      console.error('OpenRouter API error:', error);
+      
+      // Fallback: Análise simples em caso de erro na API
+      const words = text.split(/\s+/).filter(word => word.length > 0);
+      const wordCount = words.length;
+      const longWords = words.filter(word => word.length > 6).length;
+      const longWordsPercentage = Math.round((longWords / wordCount) * 100) || 0;
+      
+      // Estimativa simples de palavras problemáticas
+      const problemWordCount = Math.round(wordCount * 0.4); // Estimativa de 40% de palavras problemáticas
+      const problemPercentage = 40;
+      
+      // Cálculo simples de pontuação de dificuldade
+      const difficultyScore = Math.min(100, Math.round((problemPercentage + longWordsPercentage) / 2));
+      
+      // Determinar o nível de Maria com base na pontuação
+      let mariaLevel = "Iniciante";
+      let levelDescription = "Texto com poucas abreviações e erros. Fácil de entender.";
+      
+      if (difficultyScore > 75) {
+        mariaLevel = "Maria Suprema";
+        levelDescription = "Texto extremamente difícil. Só a Maria entende!";
+      } else if (difficultyScore > 50) {
+        mariaLevel = "Avançado";
+        levelDescription = "Muitas abreviações e erros. Desafio para traduzir.";
+      } else if (difficultyScore > 25) {
+        mariaLevel = "Intermediário";
+        levelDescription = "Algumas abreviações e erros. Moderadamente difícil.";
+      }
+      
+      return NextResponse.json({
+        wordCount,
+        problemWordCount,
+        problemPercentage,
+        longWords,
+        longWordsPercentage,
+        difficultyScore,
+        mariaLevel,
+        levelDescription,
+        error: 'Erro na API. Usando análise simplificada.'
+      });
     }
   } catch (error) {
     console.error('Analysis error:', error);
     return NextResponse.json(
-      { error: 'Erro ao processar a análise' },
+      { error: 'Erro interno do servidor' },
       { status: 500 }
     );
   }

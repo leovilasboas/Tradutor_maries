@@ -19,17 +19,25 @@ export default function Home() {
     setOriginalText(text);
     setIsLoading(true);
     
+    // Usar a chave fixa da API
+    const token = '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';
+    
     try {
       const response = await fetch('/api/translate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ text }),
       });
       
       const data = await response.json();
-      setTranslatedText(data.translatedText);
+      if (data.error) {
+        setTranslatedText(`Erro: ${data.error}`);
+      } else {
+        setTranslatedText(data.translatedText);
+      }
     } catch (error) {
       console.error('Translation error:', error);
       setTranslatedText('Erro na tradução. Por favor, tente novamente.');
