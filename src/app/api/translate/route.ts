@@ -34,55 +34,53 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Usar a chave fixa da API
-    const token = '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';
+    // Usar a chave da API do ambiente ou a chave fixa
+    const token = process.env.OPENROUTER_API_KEY || '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';
     
-    // Configurar o cliente OpenAI para usar o OpenRouter
-    const openai = new OpenAI({
-      apiKey: token,
-      baseURL: 'https://openrouter.ai/api/v1',
-      defaultHeaders: {
-        "HTTP-Referer": "https://tradutor-maries.vercel.app", // Site URL para rankings no openrouter.ai
-        "X-Title": "Tradutor de Mariês", // Título do site para rankings no openrouter.ai
-      },
-    });
-
+    console.log('Using API token:', token ? 'Token found (not showing for security)' : 'No token found');
+    
+    console.log('Using OpenRouter API for translation with DeepSeek Chat v3 model');
+    
     try {
-      console.log('Using OpenRouter API for translation with DeepSeek Chat v3 model');
-      
-      // Criar uma solicitação de chat para o modelo
-      const response = await openai.chat.completions.create({
-        model: 'deepseek/deepseek-chat-v3-0324:free', // Modelo DeepSeek Chat v3 disponível gratuitamente no OpenRouter
-        messages: [
-          {
-            role: 'system',
-            content: 'Você é um especialista em português brasileiro formal. Sua tarefa é corrigir textos que contém erros gramaticais, ortográficos e gírias, reescrevendo-os em português formal perfeito. Retorne APENAS o texto corrigido, sem explicações, comentários ou informações adicionais.'
-          },
-          {
-            role: 'user',
-            content: `Corrija e reescreva o seguinte texto em português formal perfeito, mantendo o significado original. Retorne APENAS o texto corrigido, sem explicações ou comentários:\n\n"${text}"`
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 512,
+      // Configurar o cliente OpenAI para usar o OpenRouter
+      const client = new OpenAI({
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: token,
+        defaultHeaders: {
+          "HTTP-Referer": "https://tradutor-maries.vercel.app", // Site URL para rankings no openrouter.ai
+          "X-Title": "Tradutor de Mariês", // Título do site para rankings no openrouter.ai
+        }
       });
       
-      // Verificar se há resposta válida
-      if (!response.choices || response.choices.length === 0 || !response.choices[0].message.content) {
-        throw new Error('Resposta vazia do modelo');
-      }
-
-      // Extrair o texto traduzido da resposta
-      let translatedText = response.choices[0].message.content.trim();
+      // Criar uma solicitação de chat para o modelo
+      const completion = await client.chat.completions.create({
+        model: "deepseek/deepseek-chat-v3-0324:free",
+        messages: [
+          {
+            role: "system",
+            content: "Você é um especialista em português brasileiro formal. Sua tarefa é corrigir textos que contém erros gramaticais, ortográficos e gírias, reescrevendo-os em português formal perfeito. Retorne APENAS o texto corrigido, sem explicações, comentários ou informações adicionais."
+          },
+          {
+            role: "user",
+            content: `Corrija e reescreva o seguinte texto em português formal perfeito, mantendo o significado original. Retorne APENAS o texto corrigido, sem explicações ou comentários:\n\n"${text}"`
+          }
+        ]
+      });
       
-      // Processar o texto traduzido
-      translatedText = postProcessTranslation(translatedText);
+      // Extrair o texto traduzido da resposta
+      const translatedText = completion.choices[0]?.message?.content?.trim() || '';
+      
+      // Processar o texto traduzido para garantir a formatação correta
+      const processedText = postProcessTranslation(translatedText);
 
-      return NextResponse.json({ translatedText });
-    } catch (error) {
+      // Retornar o texto traduzido
+      return NextResponse.json({ translatedText: processedText });
+      
+    } catch (error: any) {
       console.error('OpenRouter API error:', error);
+      
       return NextResponse.json(
-        { error: 'Erro ao traduzir o texto. Verifique se o token da API é válido.' },
+        { error: `Erro ao traduzir o texto: ${error.message || 'Erro desconhecido'}` },
         { status: 500 }
       );
     }

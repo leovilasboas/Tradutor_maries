@@ -26,8 +26,8 @@ export default function MariaStats({ originalText }: MariaStatsProps) {
     
     setLoading(true);
     try {
-      // Usar a chave fixa da API
-      const token = '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';
+      // Usar a chave da API do ambiente ou a chave fixa
+      const token = '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';
       
       console.log('Analisando texto:', originalText);
       

@@ -13,32 +13,35 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Usar a chave fixa da API
-    const token = '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';
+    // Usar a chave da API do ambiente ou a chave fixa
+    const token = process.env.OPENROUTER_API_KEY || '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';
     
-    // Configurar o cliente OpenAI para usar o OpenRouter
-    const openai = new OpenAI({
-      apiKey: token,
-      baseURL: 'https://openrouter.ai/api/v1',
-      defaultHeaders: {
-        "HTTP-Referer": "https://tradutor-maries.vercel.app", // Site URL para rankings no openrouter.ai
-        "X-Title": "Tradutor de Mariês", // Título do site para rankings no openrouter.ai
-      },
-    });
-
+    console.log('Using API token:', token ? 'Token found (not showing for security)' : 'No token found');
+    console.log('Using OpenRouter API for analysis with DeepSeek Chat v3 model');
+    
     try {
-      console.log('Using OpenRouter API for analysis with DeepSeek Chat v3 model');
+      // Configurar o cliente OpenAI para usar o OpenRouter
+      const client = new OpenAI({
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: token,
+        defaultHeaders: {
+          "HTTP-Referer": "https://tradutor-maries.vercel.app", // Site URL para rankings no openrouter.ai
+          "X-Title": "Tradutor de Mariês", // Título do site para rankings no openrouter.ai
+        }
+      });
       
       // Criar uma solicitação de chat para o modelo
-      const response = await openai.chat.completions.create({
-        model: 'deepseek/deepseek-chat-v3-0324:free', // Modelo DeepSeek disponível gratuitamente no OpenRouter
+      const completion = await client.chat.completions.create({
+        model: "deepseek/deepseek-chat-v3-0324:free",
+        temperature: 0.3,
+        max_tokens: 512,
         messages: [
           {
-            role: 'system',
-            content: 'Você é um especialista em análise linguística do português brasileiro. Sua tarefa é analisar textos que podem conter erros gramaticais, ortográficos e gírias. Você deve retornar apenas um objeto JSON válido, sem texto adicional.'
+            role: "system",
+            content: "Você é um especialista em análise linguística do português brasileiro. Sua tarefa é analisar textos que podem conter erros gramaticais, ortográficos e gírias. Você deve retornar apenas um objeto JSON válido, sem texto adicional."
           },
           {
-            role: 'user',
+            role: "user",
             content: `Analise o seguinte texto: "${text}"
 
 Retorne um objeto JSON com exatamente estes campos (todos os campos são obrigatórios):
@@ -55,18 +58,11 @@ Retorne um objeto JSON com exatamente estes campos (todos os campos são obrigat
 
 Retorne APENAS o JSON, sem explicações, comentários ou texto adicional.`
           }
-        ],
-        temperature: 0.3,
-        max_tokens: 512
+        ]
       });
       
-      // Verificar se há resposta válida
-      if (!response.choices || response.choices.length === 0 || !response.choices[0].message.content) {
-        throw new Error('Resposta vazia do modelo');
-      }
-
       // Extrair o JSON da resposta
-      let jsonText = response.choices[0].message.content.trim();
+      let jsonText = completion.choices[0]?.message?.content?.trim() || '';
       
       // Tentar encontrar o JSON na resposta, caso haja texto adicional
       const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
@@ -95,47 +91,9 @@ Retorne APENAS o JSON, sem explicações, comentários ou texto adicional.`
         }
         
         return NextResponse.json(analysisData);
-      } catch (jsonError) {
-        console.error('JSON parsing error:', jsonError);
-        
-        // Fallback: Análise simples se o JSON não puder ser analisado
-        const words = text.split(/\s+/).filter(word => word.length > 0);
-        const wordCount = words.length;
-        const longWords = words.filter(word => word.length > 6).length;
-        const longWordsPercentage = Math.round((longWords / wordCount) * 100) || 0;
-        
-        // Estimativa simples de palavras problemáticas
-        const problemWordCount = Math.round(wordCount * 0.4); // Estimativa de 40% de palavras problemáticas
-        const problemPercentage = 40;
-        
-        // Cálculo simples de pontuação de dificuldade
-        const difficultyScore = Math.min(100, Math.round((problemPercentage + longWordsPercentage) / 2));
-        
-        // Determinar o nível de Maria com base na pontuação
-        let mariaLevel = "Iniciante";
-        let levelDescription = "Texto com poucas abreviações e erros. Fácil de entender.";
-        
-        if (difficultyScore > 75) {
-          mariaLevel = "Maria Suprema";
-          levelDescription = "Texto extremamente difícil. Só a Maria entende!";
-        } else if (difficultyScore > 50) {
-          mariaLevel = "Avançado";
-          levelDescription = "Muitas abreviações e erros. Desafio para traduzir.";
-        } else if (difficultyScore > 25) {
-          mariaLevel = "Intermediário";
-          levelDescription = "Algumas abreviações e erros. Moderadamente difícil.";
-        }
-        
-        return NextResponse.json({
-          wordCount,
-          problemWordCount,
-          problemPercentage,
-          longWords,
-          longWordsPercentage,
-          difficultyScore,
-          mariaLevel,
-          levelDescription
-        });
+      } catch (jsonError: any) {
+        console.error('Erro ao analisar JSON:', jsonError);
+        throw new Error(`Erro ao analisar a resposta JSON: ${jsonError.message}`);
       }
     } catch (error) {
       console.error('OpenRouter API error:', error);
