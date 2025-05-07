@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
         messages: [
           {
             role: "system",
-            content: "Você é um especialista em português brasileiro formal. Sua tarefa é corrigir textos que contém erros gramaticais, ortográficos e gírias, reescrevendo-os em português formal perfeito. Retorne APENAS o texto corrigido, sem explicações, comentários ou informações adicionais."
+            content: "Você é um especialista em português brasileiro. Sua tarefa é corrigir textos que contém erros gramaticais e ortográficos, mas mantendo o tom e estilo do texto original. Não torne o texto muito formal - apenas corrija o que for necessário para que seja compreensível, mantendo a naturalidade e o jeito de falar da pessoa. Retorne APENAS o texto corrigido, sem explicações, comentários ou informações adicionais."
           },
           {
             role: "user",
